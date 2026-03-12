@@ -17,6 +17,7 @@ import {
   Clock,
   MapPinIcon,
   AlertCircle,
+  Map as MapIcon,
 } from 'lucide-react';
 
 export default function App() {
@@ -26,6 +27,7 @@ export default function App() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [reports, setReports] = useState([]);
   const [showReportForm, setShowReportForm] = useState(false);
+  const [viewMode, setViewMode] = useState('list'); // 'list' or 'map'
 
   // Load data on startup
   useEffect(() => {
@@ -111,6 +113,7 @@ export default function App() {
       return false;
     }
 
+    // Generate random coordinates for demo (in real app, use geolocation)
     const newReport = {
       id: Date.now(),
       userId: user.id,
@@ -118,8 +121,8 @@ export default function App() {
       status: status, // 'full', 'moderate', 'empty'
       description: description,
       timestamp: new Date().toISOString(),
-      latitude: Math.random() * 180 - 90,
-      longitude: Math.random() * 360 - 180,
+      latitude: 28.6139 + (Math.random() - 0.5) * 0.1, // Delhi area
+      longitude: 77.209 + (Math.random() - 0.5) * 0.1,
     };
 
     const updatedReports = [...reports, newReport];
@@ -815,7 +818,112 @@ export default function App() {
     );
   };
 
-  // DASHBOARD PAGE - THE MAIN FEATURE!
+  // MAP VIEW COMPONENT - NEW FOR DAY 4!
+  const MapView = ({ reports }) => {
+    const mapRef = React.useRef(null);
+    const mapInstanceRef = React.useRef(null);
+
+    React.useEffect(() => {
+      if (!mapRef.current) return;
+
+      // Create Leaflet map
+      const map = window.L.map(mapRef.current).setView([28.6139, 77.209], 13);
+      mapInstanceRef.current = map;
+
+      // Add OpenStreetMap tiles
+      window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors',
+        maxZoom: 19,
+      }).addTo(map);
+
+      // Add markers for each report
+      reports.forEach((report) => {
+        const color =
+          report.status === 'full'
+            ? '#EF4444'
+            : report.status === 'moderate'
+            ? '#F59E0B'
+            : '#10B981';
+
+        const markerHtml = `
+          <div style="
+            width: 30px;
+            height: 30px;
+            background: ${color};
+            border-radius: 50%;
+            border: 3px solid white;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: white;
+            cursor: pointer;
+          ">
+            📍
+          </div>
+        `;
+
+        const customIcon = window.L.divIcon({
+          html: markerHtml,
+          iconSize: [30, 30],
+          iconAnchor: [15, 15],
+          popupAnchor: [0, -15],
+        });
+
+        window.L.marker([report.latitude, report.longitude], {
+          icon: customIcon,
+        })
+          .bindPopup(
+            `
+            <div style="padding: 10px; font-size: 14px;">
+              <strong>${report.location}</strong><br/>
+              Status: ${
+                report.status === 'full'
+                  ? '🔴 Full'
+                  : report.status === 'moderate'
+                  ? '🟡 Moderate'
+                  : '🟢 Empty'
+              }<br/>
+              ${
+                report.description ? `<small>${report.description}</small>` : ''
+              }
+            </div>
+          `
+          )
+          .addTo(map);
+      });
+
+      return () => {
+        if (mapInstanceRef.current) {
+          mapInstanceRef.current.remove();
+        }
+      };
+    }, [reports]);
+
+    return (
+      <div
+        style={{
+          width: '100%',
+          height: '600px',
+          borderRadius: '12px',
+          overflow: 'hidden',
+          boxShadow: '0 4px 6px rgba(0,0,0,0.1)',
+          marginBottom: '40px',
+        }}
+      >
+        <div
+          ref={mapRef}
+          style={{
+            width: '100%',
+            height: '100%',
+          }}
+        />
+      </div>
+    );
+  };
+
+  // DASHBOARD PAGE - UPDATED WITH MAP VIEW
   const DashboardPage = () => {
     return (
       <div>
@@ -907,109 +1015,174 @@ export default function App() {
               </p>
             </div>
 
-            {/* Statistics */}
+            {/* View Toggle Buttons - NEW FOR DAY 4! */}
             <div
               style={{
-                display: 'grid',
-                gridTemplateColumns:
-                  window.innerWidth > 768 ? 'repeat(4, 1fr)' : '1fr',
-                gap: '16px',
+                display: 'flex',
+                gap: '12px',
                 marginBottom: '40px',
               }}
             >
-              {[
-                {
-                  label: 'Total Reports',
-                  value: stats.total,
-                  color: '#10B981',
-                  icon: '📊',
-                },
-                {
-                  label: 'Full Bins',
-                  value: stats.full,
-                  color: '#EF4444',
-                  icon: '🔴',
-                },
-                {
-                  label: 'Moderate',
-                  value: stats.moderate,
-                  color: '#F59E0B',
-                  icon: '🟡',
-                },
-                {
-                  label: 'Empty',
-                  value: stats.empty,
-                  color: '#10B981',
-                  icon: '🟢',
-                },
-              ].map((stat, idx) => (
-                <div
-                  key={idx}
-                  style={{
-                    backgroundColor: '#FFFFFF',
-                    padding: '24px',
-                    borderRadius: '12px',
-                    border: `2px solid ${stat.color}`,
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
-                  }}
-                >
-                  <div style={{ fontSize: '24px', marginBottom: '8px' }}>
-                    {stat.icon}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: '32px',
-                      fontWeight: 'bold',
-                      color: stat.color,
-                      marginBottom: '4px',
-                    }}
-                  >
-                    {stat.value}
-                  </div>
-                  <div style={{ color: '#4B5563', fontSize: '14px' }}>
-                    {stat.label}
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Action Button */}
-            <div style={{ marginBottom: '40px' }}>
               <button
-                onClick={() => setShowReportForm(!showReportForm)}
+                onClick={() => setViewMode('list')}
                 style={{
-                  backgroundColor: '#10B981',
-                  color: '#FFFFFF',
-                  padding: '16px 32px',
+                  backgroundColor: viewMode === 'list' ? '#10B981' : '#E5E7EB',
+                  color: viewMode === 'list' ? '#FFFFFF' : '#111827',
+                  padding: '12px 24px',
                   borderRadius: '8px',
                   border: 'none',
-                  fontWeight: 'bold',
-                  fontSize: '16px',
+                  fontWeight: '600',
                   cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '8px',
                   transition: 'all 0.3s ease',
                 }}
-                onMouseEnter={(e) => {
-                  e.target.style.backgroundColor = '#059669';
-                  e.target.style.transform = 'scale(1.05)';
-                }}
-                onMouseLeave={(e) => {
-                  e.target.style.backgroundColor = '#10B981';
-                  e.target.style.transform = 'scale(1)';
+              >
+                📋 List View
+              </button>
+              <button
+                onClick={() => setViewMode('map')}
+                style={{
+                  backgroundColor: viewMode === 'map' ? '#10B981' : '#E5E7EB',
+                  color: viewMode === 'map' ? '#FFFFFF' : '#111827',
+                  padding: '12px 24px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease',
                 }}
               >
-                <Plus size={20} />
-                {showReportForm ? 'Hide Form' : 'Report New Bin'}
+                🗺️ Map View
               </button>
             </div>
 
-            {/* Report Form */}
-            {showReportForm && <ReportForm onSubmit={handleAddReport} />}
+            {/* Map View - NEW FOR DAY 4! */}
+            {viewMode === 'map' && (
+              <>
+                <h2
+                  style={{
+                    fontSize: '24px',
+                    fontWeight: 'bold',
+                    color: '#111827',
+                    marginBottom: '24px',
+                  }}
+                >
+                  Garbage Bins on Map
+                </h2>
+                <MapView reports={userReports} />
+              </>
+            )}
 
-            {/* Reports List */}
-            <ReportsList reports={userReports} onDelete={handleDeleteReport} />
+            {/* List View */}
+            {viewMode === 'list' && (
+              <>
+                {/* Statistics */}
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns:
+                      window.innerWidth > 768 ? 'repeat(4, 1fr)' : '1fr',
+                    gap: '16px',
+                    marginBottom: '40px',
+                  }}
+                >
+                  {[
+                    {
+                      label: 'Total Reports',
+                      value: stats.total,
+                      color: '#10B981',
+                      icon: '📊',
+                    },
+                    {
+                      label: 'Full Bins',
+                      value: stats.full,
+                      color: '#EF4444',
+                      icon: '🔴',
+                    },
+                    {
+                      label: 'Moderate',
+                      value: stats.moderate,
+                      color: '#F59E0B',
+                      icon: '🟡',
+                    },
+                    {
+                      label: 'Empty',
+                      value: stats.empty,
+                      color: '#10B981',
+                      icon: '🟢',
+                    },
+                  ].map((stat, idx) => (
+                    <div
+                      key={idx}
+                      style={{
+                        backgroundColor: '#FFFFFF',
+                        padding: '24px',
+                        borderRadius: '12px',
+                        border: `2px solid ${stat.color}`,
+                        boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
+                      }}
+                    >
+                      <div style={{ fontSize: '24px', marginBottom: '8px' }}>
+                        {stat.icon}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: '32px',
+                          fontWeight: 'bold',
+                          color: stat.color,
+                          marginBottom: '4px',
+                        }}
+                      >
+                        {stat.value}
+                      </div>
+                      <div style={{ color: '#4B5563', fontSize: '14px' }}>
+                        {stat.label}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Action Button */}
+                <div style={{ marginBottom: '40px' }}>
+                  <button
+                    onClick={() => setShowReportForm(!showReportForm)}
+                    style={{
+                      backgroundColor: '#10B981',
+                      color: '#FFFFFF',
+                      padding: '16px 32px',
+                      borderRadius: '8px',
+                      border: 'none',
+                      fontWeight: 'bold',
+                      fontSize: '16px',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '8px',
+                      transition: 'all 0.3s ease',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.target.style.backgroundColor = '#059669';
+                      e.target.style.transform = 'scale(1.05)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.target.style.backgroundColor = '#10B981';
+                      e.target.style.transform = 'scale(1)';
+                    }}
+                  >
+                    <Plus size={20} />
+                    {showReportForm ? 'Hide Form' : 'Report New Bin'}
+                  </button>
+                </div>
+
+                {/* Report Form */}
+                {showReportForm && <ReportForm onSubmit={handleAddReport} />}
+
+                {/* Reports List */}
+                <ReportsList
+                  reports={userReports}
+                  onDelete={handleDeleteReport}
+                />
+              </>
+            )}
           </div>
         </div>
       </div>
